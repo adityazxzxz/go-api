@@ -1,8 +1,14 @@
 package middleware
 
 import (
+	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -11,6 +17,7 @@ import (
 )
 
 var jwtKey = []byte("MYAPIKEY")
+var secretKey = "MYSECRETKEY"
 
 type Claims struct {
 	UserID int    `json:"userid"`
@@ -81,4 +88,75 @@ func GenerateJWT(userID int, email string, expireTime int) (string, error) {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(jwtKey)
+}
+
+func HMACAuth() gin.HandlerFunc {
+	return func(c *gin.Context) {
+
+		signature := c.GetHeader("X-Signature")
+		nonce := c.GetHeader("X-Nonce")
+		timestamp := c.GetHeader("X-Timestamp")
+
+		if signature == "" || nonce == "" || timestamp == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "Missing HMAC headers",
+			})
+			return
+		}
+
+		// ✅ Parse epoch timestamp
+		tsInt, err := strconv.ParseInt(timestamp, 10, 64)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "Invalid timestamp",
+			})
+			return
+		}
+
+		// ✅ TTL check (5 menit)
+		now := time.Now().Unix()
+		if now-tsInt > 300 {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "Request expired",
+			})
+			return
+		}
+
+		if tsInt-now > 300 {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "Invalid timestamp (future)",
+			})
+			return
+		}
+
+		// ✅ Read body
+		var bodyBytes []byte
+		if c.Request.Body != nil {
+			bodyBytes, _ = io.ReadAll(c.Request.Body)
+		}
+
+		// Restore body
+		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+		body := string(bodyBytes)
+
+		// ✅ Build payload
+		method := strings.ToUpper(c.Request.Method)
+		payload := method + ":" + nonce + ":" + timestamp + ":" + body
+
+		// ✅ Generate HMAC
+		mac := hmac.New(sha256.New, []byte(secretKey))
+		mac.Write([]byte(payload))
+		expectedMAC := hex.EncodeToString(mac.Sum(nil))
+
+		// ✅ Constant-time compare
+		if !hmac.Equal([]byte(expectedMAC), []byte(signature)) {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "Invalid signature",
+			})
+			return
+		}
+
+		c.Next()
+	}
 }
