@@ -5,7 +5,9 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"go-api/utils"
 	"io"
 	"net/http"
 	"strconv"
@@ -16,12 +18,16 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var jwtKey = []byte("MYAPIKEY")
-var secretKey = "MYSECRETKEY"
+var jwtKey = []byte("mysupersecretkeymustbe32bytes!!!")
+var secretKey = "mysupersecretkeymustbe32bytes!!!"
 
-type Claims struct {
+type UserClaims struct {
 	UserID int    `json:"userid"`
 	Email  string `json:"email"`
+	jwt.StandardClaims
+}
+type Claims struct {
+	Data string `json:"data"`
 	jwt.StandardClaims
 }
 
@@ -65,8 +71,23 @@ func JWTAuth() gin.HandlerFunc {
 			return
 		}
 
-		UserID := claims.UserID
+		decryptedJSON, err := utils.Decrypt(claims.Data, jwtKey)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token Payload Invalid"})
+			c.Abort()
+			return
+		}
+		var user UserClaims
+		err = json.Unmarshal([]byte(decryptedJSON), &user)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Failed to parse user claims"})
+			c.Abort()
+			return
+		}
+		UserID := user.UserID
+		Email := user.Email
 		c.Set("user_id", UserID)
+		c.Set("email", Email)
 
 		c.Next()
 
@@ -76,9 +97,22 @@ func JWTAuth() gin.HandlerFunc {
 
 func GenerateJWT(userID int, email string, expireTime int) (string, error) {
 	expirationTime := time.Now().Add(time.Duration(expireTime) * time.Hour) // berlaku 24 jam
-	claims := &Claims{
+
+	payload := UserClaims{
 		UserID: userID,
 		Email:  email,
+	}
+
+	jsonBytes, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+	encryptedData, err := utils.Encrypt(string(jsonBytes), jwtKey)
+	if err != nil {
+		return "", err
+	}
+	claims := &Claims{
+		Data: encryptedData,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: expirationTime.Unix(),
 			IssuedAt:  time.Now().Unix(),
@@ -104,7 +138,6 @@ func HMACAuth() gin.HandlerFunc {
 			return
 		}
 
-		// ✅ Parse epoch timestamp
 		tsInt, err := strconv.ParseInt(timestamp, 10, 64)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
@@ -113,7 +146,6 @@ func HMACAuth() gin.HandlerFunc {
 			return
 		}
 
-		// ✅ TTL check (5 menit)
 		now := time.Now().Unix()
 		if now-tsInt > 300 {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
@@ -129,27 +161,22 @@ func HMACAuth() gin.HandlerFunc {
 			return
 		}
 
-		// ✅ Read body
 		var bodyBytes []byte
 		if c.Request.Body != nil {
 			bodyBytes, _ = io.ReadAll(c.Request.Body)
 		}
 
-		// Restore body
 		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 		body := string(bodyBytes)
 
-		// ✅ Build payload
 		method := strings.ToUpper(c.Request.Method)
 		payload := method + ":" + nonce + ":" + timestamp + ":" + body
 
-		// ✅ Generate HMAC
 		mac := hmac.New(sha256.New, []byte(secretKey))
 		mac.Write([]byte(payload))
 		expectedMAC := hex.EncodeToString(mac.Sum(nil))
 
-		// ✅ Constant-time compare
 		if !hmac.Equal([]byte(expectedMAC), []byte(signature)) {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error": "Invalid signature",
