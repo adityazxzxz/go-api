@@ -23,6 +23,8 @@ type RegisterRequest struct {
 
 func (idb *InDB) Login(c *gin.Context) {
 	var req LoginRequest
+	expireTime := 24 // dalam jam
+
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		return
@@ -38,8 +40,6 @@ func (idb *InDB) Login(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
 		return
 	}
-
-	expireTime := 24
 
 	token, err := middleware.GenerateJWT(user.ID, user.Email, expireTime)
 	if err != nil {
@@ -65,6 +65,8 @@ func (idb *InDB) Login(c *gin.Context) {
 
 func (idb *InDB) Register(c *gin.Context) {
 	var req RegisterRequest
+	expireTime := 24
+
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		return
@@ -80,8 +82,6 @@ func (idb *InDB) Register(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
 		return
 	}
-
-	expireTime := 24
 
 	token, err := middleware.GenerateJWT(user.ID, user.Email, expireTime)
 	if err != nil {

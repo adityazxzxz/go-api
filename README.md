@@ -77,3 +77,36 @@ Install Air (jika belum):
 
 ---
 
+## 🚀 Cara pakai HMAC di client
+
+```javascript
+
+const secret = "mysupersecretkeymustbe32bytes!!!"; // samakan dengan backend
+
+const method = pm.request.method;
+const nonce = crypto.randomUUID();
+const timestamp = Math.floor(Date.now() / 1000).toString();
+
+let body = "";
+if (pm.request.body && pm.request.body.raw) {
+    body = pm.request.body.raw;
+}
+
+const payload = `${method}:${nonce}:${timestamp}:${body}`;
+
+const signature = CryptoJS.HmacSHA256(payload, secret)
+    .toString(CryptoJS.enc.Hex);
+
+pm.request.headers.upsert({ key: "X-Nonce", value: nonce });
+pm.request.headers.upsert({ key: "X-Timestamp", value: timestamp });
+pm.request.headers.upsert({ key: "X-Signature", value: signature });
+
+console.log("Nonce:", nonce)
+console.log("timestamp:", timestamp)
+console.log("Payload:", payload);
+console.log("Signature:", signature);
+
+```
+
+
+

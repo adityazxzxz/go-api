@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"go-api/config"
 	"go-api/utils"
 	"io"
 	"net/http"
@@ -16,10 +17,11 @@ import (
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 )
 
-var jwtKey = []byte("mysupersecretkeymustbe32bytes!!!")
 var secretKey = "mysupersecretkeymustbe32bytes!!!"
+var jwtKey = []byte(secretKey)
 
 type UserClaims struct {
 	UserID int    `json:"userid"`
@@ -136,6 +138,27 @@ func HMACAuth() gin.HandlerFunc {
 				"error": "Missing HMAC headers",
 			})
 			return
+		}
+
+		args := redis.SetArgs{
+			Mode: "NX",             // <- ini pengganti NX
+			TTL:  60 * time.Second, // 60 detik untuk mencegah replay attack
+		}
+
+		err := config.Redis.SetArgs(
+			config.Ctx,
+			nonce,
+			1,
+			args,
+		).Err()
+
+		if err == redis.Nil {
+			fmt.Println("too much request, please try again later")
+			return
+		}
+
+		if err != nil {
+			panic(err)
 		}
 
 		tsInt, err := strconv.ParseInt(timestamp, 10, 64)
