@@ -140,27 +140,6 @@ func HMACAuth() gin.HandlerFunc {
 			return
 		}
 
-		args := redis.SetArgs{
-			Mode: "NX",             // <- ini pengganti NX
-			TTL:  60 * time.Second, // 60 detik untuk mencegah replay attack
-		}
-
-		err := config.Redis.SetArgs(
-			config.Ctx,
-			nonce,
-			1,
-			args,
-		).Err()
-
-		if err == redis.Nil {
-			fmt.Println("too much request, please try again later")
-			return
-		}
-
-		if err != nil {
-			panic(err)
-		}
-
 		tsInt, err := strconv.ParseInt(timestamp, 10, 64)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
@@ -183,6 +162,34 @@ func HMACAuth() gin.HandlerFunc {
 			})
 			return
 		}
+
+		// region mutex
+		lockKey := "nonce:" + nonce
+
+		err = config.Redis.SetArgs(
+			config.Ctx,
+			lockKey,
+			1,
+			redis.SetArgs{
+				Mode: "NX",            // hanya set jika belum ada
+				TTL:  5 * time.Minute, // sama dengan window timestamp
+			},
+		).Err()
+
+		if err == redis.Nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "Replay attack detected",
+			})
+			return
+		}
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
+				"error": "Redis error",
+			})
+			return
+		}
+		// end region mutex
 
 		var bodyBytes []byte
 		if c.Request.Body != nil {
