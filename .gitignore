@@ -16,3 +16,7 @@ tmp/
 # Go build
 bin/
 dist/
+
+
+# mac 
+**/.DS_Store
