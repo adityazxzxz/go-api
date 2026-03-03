@@ -1,1 +1,18 @@
+# Logs
+logs/*
+!logs/.gitkeep
+
+# Air temp build
+tmp/
+
+# Environment
 .env
+
+# Binary
+*.exe
+*.out
+*.app
+
+# Go build
+bin/
+dist/
