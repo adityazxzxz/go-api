@@ -77,7 +77,7 @@ Install Air (jika belum):
 
 ---
 
-## 🚀 Cara pakai HMAC di client
+## 🚀 Cara pakai HMAC di client pre request POSTMAN
 
 ```javascript
 
