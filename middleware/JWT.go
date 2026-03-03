@@ -1,27 +1,19 @@
 package middleware
 
 import (
-	"bytes"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"go-api/config"
 	"go-api/utils"
-	"io"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
 )
 
-var secretKey = "mysupersecretkeymustbe32bytes!!!"
-var jwtKey = []byte(secretKey)
+// Declare key ada di config/Key.go
 
 type UserClaims struct {
 	UserID int    `json:"userid"`
@@ -35,6 +27,7 @@ type Claims struct {
 
 func JWTAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
+
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
 			c.JSON(401, gin.H{
@@ -57,7 +50,7 @@ func JWTAuth() gin.HandlerFunc {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 			}
-			return jwtKey, nil
+			return config.JWTKey, nil
 		})
 
 		if err != nil || !token.Valid {
@@ -72,8 +65,7 @@ func JWTAuth() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-
-		decryptedJSON, err := utils.Decrypt(claims.Data, jwtKey)
+		decryptedJSON, err := utils.Decrypt(claims.Data, config.JWTKey)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token Payload Invalid"})
 			c.Abort()
@@ -109,7 +101,7 @@ func GenerateJWT(userID int, email string, expireTime int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	encryptedData, err := utils.Encrypt(string(jsonBytes), jwtKey)
+	encryptedData, err := utils.Encrypt(string(jsonBytes), config.JWTKey)
 	if err != nil {
 		return "", err
 	}
@@ -123,97 +115,5 @@ func GenerateJWT(userID int, email string, expireTime int) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(jwtKey)
-}
-
-func HMACAuth() gin.HandlerFunc {
-	return func(c *gin.Context) {
-
-		signature := c.GetHeader("X-Signature")
-		nonce := c.GetHeader("X-Nonce")
-		timestamp := c.GetHeader("X-Timestamp")
-
-		if signature == "" || nonce == "" || timestamp == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": "Missing HMAC headers",
-			})
-			return
-		}
-
-		tsInt, err := strconv.ParseInt(timestamp, 10, 64)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": "Invalid timestamp",
-			})
-			return
-		}
-
-		now := time.Now().Unix()
-		if now-tsInt > 300 {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": "Request expired",
-			})
-			return
-		}
-
-		if tsInt-now > 300 {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": "Invalid timestamp (future)",
-			})
-			return
-		}
-
-		// region mutex
-		lockKey := "nonce:" + nonce
-
-		err = config.Redis.SetArgs(
-			config.Ctx,
-			lockKey,
-			1,
-			redis.SetArgs{
-				Mode: "NX",            // hanya set jika belum ada
-				TTL:  5 * time.Minute, // sama dengan window timestamp
-			},
-		).Err()
-
-		if err == redis.Nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": "Replay attack detected",
-			})
-			return
-		}
-
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
-				"error": "Redis error",
-			})
-			return
-		}
-		// end region mutex
-
-		var bodyBytes []byte
-		if c.Request.Body != nil {
-			bodyBytes, _ = io.ReadAll(c.Request.Body)
-		}
-
-		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-
-		body := string(bodyBytes)
-
-		method := strings.ToUpper(c.Request.Method)
-		payload := method + ":" + nonce + ":" + timestamp + ":" + body
-
-		mac := hmac.New(sha256.New, []byte(secretKey))
-		mac.Write([]byte(payload))
-		expectedMAC := hex.EncodeToString(mac.Sum(nil))
-
-		if !hmac.Equal([]byte(expectedMAC), []byte(signature)) {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": "Invalid signature",
-			})
-			return
-		}
-
-		c.Next()
-	}
+	return token.SignedString(config.JWTKey)
 }

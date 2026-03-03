@@ -7,17 +7,12 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
 )
 
 func main() {
-	env := godotenv.Load()
-	if env != nil {
-		panic("Error loading .env file")
-	}
-
-	db, _ := config.DBInit() // initial database connection
+	config.LoadEnv()         // load environment variables & key secret
 	config.InitRedis()       // initial redis connection
+	db, _ := config.DBInit() // initial database connection
 
 	controllers := &controllers.InDB{DB: db}
 
