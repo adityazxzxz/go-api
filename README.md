@@ -47,6 +47,24 @@ Gunakan database:
 
 ---
 
+### Create Table `user_sessions`
+
+    CREATE TABLE IF NOT EXISTS user_sessions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id BIGINT NOT NULL,
+        refresh_token VARCHAR(36) NOT NULL,
+        user_agent TEXT,
+        revoked BIGINT NOT NULL DEFAULT 0,
+        expired_at BIGINT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX idx_users_id ON user_sessions(user_id);
+    CREATE UNIQUE INDEX idx_refresh_token ON user_sessions(refresh_token);
+
+---
+
 
 
 ## 🚀 Running the App

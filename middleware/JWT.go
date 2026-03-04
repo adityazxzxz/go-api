@@ -11,12 +11,14 @@ import (
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // Declare key ada di config/Key.go
 
 type UserClaims struct {
-	UserID int    `json:"userid"`
+	UserID uint   `json:"userid"`
 	Email  string `json:"email"`
 	jwt.StandardClaims
 }
@@ -89,8 +91,8 @@ func JWTAuth() gin.HandlerFunc {
 
 }
 
-func GenerateJWT(userID int, email string, expireTime int) (string, error) {
-	expirationTime := time.Now().Add(time.Duration(expireTime) * time.Hour) // berlaku 24 jam
+func GenerateJWT(userID uint, email string, expireTime int) (string, error) {
+	expirationTime := time.Now().Add(time.Duration(expireTime) * time.Hour)
 
 	payload := UserClaims{
 		UserID: userID,
@@ -116,4 +118,11 @@ func GenerateJWT(userID int, email string, expireTime int) (string, error) {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(config.JWTKey)
+}
+
+func GenerateRefreshToken(db *gorm.DB, userID uint) (string, error) {
+
+	token := uuid.NewString()
+
+	return token, nil
 }

@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"fmt"
 	"go-api/models"
 	"go-api/requests"
 	"go-api/resources"
@@ -12,6 +13,7 @@ import (
 
 func (idb *InDB) Profile(c *gin.Context) {
 	userID, _ := c.Get("user_id")
+	fmt.Println("user", userID)
 	var profile resources.Profile
 
 	err := idb.DB.Table("users u").
