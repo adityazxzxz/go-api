@@ -6,6 +6,8 @@ import (
 	"go-api/models"
 	"go-api/resources"
 	"net/http"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -30,6 +32,12 @@ type Result struct {
 
 func (idb *InDB) Refresh(c *gin.Context) {
 	var req RefreshRequest
+	expiredTimeStr := os.Getenv("JWT_EXPIRE")
+	expiredTime, err := strconv.Atoi(expiredTimeStr)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
+		return
+	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
@@ -37,7 +45,7 @@ func (idb *InDB) Refresh(c *gin.Context) {
 	}
 	var result Result
 
-	err := idb.DB.
+	err = idb.DB.
 		Table("user_sessions").
 		Select("user_sessions.user_id, users.email").
 		Joins("JOIN users ON users.id = user_sessions.user_id").
@@ -61,6 +69,7 @@ func (idb *InDB) Refresh(c *gin.Context) {
 		Message:      "Token refreshed successfully",
 		AccessToken:  access_token,
 		RefreshToken: refresh_token,
+		ExpiresIn:    expiredTime * 3600,
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -68,7 +77,12 @@ func (idb *InDB) Refresh(c *gin.Context) {
 
 func (idb *InDB) Login(c *gin.Context) {
 	var req LoginRequest
-	expireTime := 1 // dalam jam
+	expiredTimeStr := os.Getenv("JWT_EXPIRE")
+	expiredTime, err := strconv.Atoi(expiredTimeStr)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
+		return
+	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
@@ -86,7 +100,7 @@ func (idb *InDB) Login(c *gin.Context) {
 		return
 	}
 
-	token, err := middleware.GenerateJWT(user.ID, user.Email, expireTime)
+	token, err := middleware.GenerateJWT(user.ID, user.Email, expiredTime)
 	if err != nil {
 		fmt.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
@@ -102,6 +116,7 @@ func (idb *InDB) Login(c *gin.Context) {
 	refresh := models.UserSessions{
 		UserID:       user.ID,
 		RefreshToken: refresh_token,
+		UserAgent:    c.Request.UserAgent(),
 		ExpiredAt:    time.Now().Add(7 * 24 * time.Hour).Unix(),
 	}
 
@@ -121,7 +136,7 @@ func (idb *InDB) Login(c *gin.Context) {
 		Message:      "Login successful",
 		AccessToken:  token,
 		RefreshToken: refresh_token,
-		ExpiresIn:    expireTime * 3600, // dalam detik
+		ExpiresIn:    expiredTime * 3600, // dalam detik
 	}
 
 	c.JSON(http.StatusOK, response)
