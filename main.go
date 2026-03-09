@@ -26,6 +26,7 @@ func main() {
 	protected := router.Group("/")
 	protected.Use(middleware.JWTAuth(), middleware.HMACAuth())
 	{
+		protected.POST("/logout", controllers.RevokeToken)
 		protected.GET("/profile", controllers.Profile)
 		protected.PUT("/profile", controllers.UpdateProfile)
 	}

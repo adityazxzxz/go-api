@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"errors"
 	"fmt"
 	"go-api/middleware"
 	"go-api/models"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 type LoginRequest struct {
@@ -32,6 +34,7 @@ type Result struct {
 
 func (idb *InDB) Refresh(c *gin.Context) {
 	var req RefreshRequest
+	var session models.UserSessions
 	expiredTimeStr := os.Getenv("JWT_EXPIRE")
 	expiredTime, err := strconv.Atoi(expiredTimeStr)
 	if err != nil {
@@ -49,12 +52,34 @@ func (idb *InDB) Refresh(c *gin.Context) {
 		Table("user_sessions").
 		Select("user_sessions.user_id, users.email").
 		Joins("JOIN users ON users.id = user_sessions.user_id").
-		Where("user_sessions.refresh_token = ?", req.RefreshToken).
-		Scan(&result).Error
+		Where("user_sessions.refresh_token = ? AND user_sessions.revoked = ?", req.RefreshToken, 0).
+		First(&result).Error
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "Session not found",
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Internal Server Error",
+		})
+		return
+	}
 
 	refresh_token, err := middleware.GenerateRefreshToken(idb.DB, result.UserID)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid refresh token"})
+		return
+	}
+
+	resultSession := idb.DB.Model(&session).Where("refresh_token = ?", req.RefreshToken).Updates(map[string]interface{}{
+		"refresh_token": refresh_token,
+	})
+	if resultSession.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update refresh token"})
 		return
 	}
 
@@ -140,4 +165,32 @@ func (idb *InDB) Login(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+func (idb *InDB) RevokeToken(c *gin.Context) {
+	var req RefreshRequest
+	var session models.UserSessions
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	// err := idb.DB.Where("user_id = ?", userID).Delete(&models.UserSessions{}).Error
+	resultSession := idb.DB.Model(&session).Where("refresh_token = ? AND user_id = ?", req.RefreshToken, userID).Updates(map[string]interface{}{
+		"revoked": 1,
+	})
+
+	if resultSession.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Token revoked successfully"})
 }

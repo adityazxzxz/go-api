@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"go-api/config"
 	"io"
 	"net/http"
@@ -97,9 +98,21 @@ func HMACAuth() gin.HandlerFunc {
 
 		mac := hmac.New(sha256.New, []byte(config.HMACSecret))
 		mac.Write([]byte(payload))
-		expectedMAC := hex.EncodeToString(mac.Sum(nil))
+		expectedMAC := mac.Sum(nil)
 
-		if !hmac.Equal([]byte(expectedMAC), []byte(signature)) {
+		sigBytes, err := hex.DecodeString(signature)
+		if err != nil {
+
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "Invalid signature format",
+			})
+			return
+		}
+
+		if !hmac.Equal(expectedMAC, sigBytes) {
+			fmt.Printf("Payload: %s\n", payload)
+			fmt.Printf("Expected MAC: %s\n", expectedMAC)
+			fmt.Printf("Received Signature: %s\n", signature)
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error": "Invalid signature",
 			})

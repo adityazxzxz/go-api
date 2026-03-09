@@ -99,15 +99,21 @@ Install Air (jika belum):
 
 ```javascript
 
-const secret = "mysupersecretkeymustbe32bytes!!!"; // samakan dengan backend
+const secret = "12345678901234567890123456789012"; // samakan dengan backend
 
 const method = pm.request.method;
 const nonce = crypto.randomUUID();
 const timestamp = Math.floor(Date.now() / 1000).toString();
 
 let body = "";
+
 if (pm.request.body && pm.request.body.raw) {
-    body = pm.request.body.raw;
+    body = pm.variables.replaceIn(pm.request.body.raw);
+    const obj = JSON.parse(body);
+    body = JSON.stringify(obj);
+
+    // update body request supaya sama dengan yang disign
+    pm.request.body.raw = body;
 }
 
 const payload = `${method}:${nonce}:${timestamp}:${body}`;
@@ -123,6 +129,13 @@ console.log("Nonce:", nonce)
 console.log("timestamp:", timestamp)
 console.log("Payload:", payload);
 console.log("Signature:", signature);
+
+
+```
+
+## Build untuk linux
+``` bash
+GOOS=linux GOARCH=amd64 go build -o go_api main.go
 
 ```
 
