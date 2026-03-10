@@ -52,7 +52,7 @@ func (idb *InDB) Refresh(c *gin.Context) {
 		Table("user_sessions").
 		Select("user_sessions.user_id, users.email").
 		Joins("JOIN users ON users.id = user_sessions.user_id").
-		Where("user_sessions.refresh_token = ? AND user_sessions.revoked = ?", req.RefreshToken, 0).
+		Where("user_sessions.refresh_token = ? AND user_sessions.revoked = ? AND user_sessions.expired_at > ?", req.RefreshToken, 0, time.Now().Unix()).
 		First(&result).Error
 
 	if err != nil {
@@ -103,7 +103,10 @@ func (idb *InDB) Refresh(c *gin.Context) {
 func (idb *InDB) Login(c *gin.Context) {
 	var req LoginRequest
 	expiredTimeStr := os.Getenv("JWT_EXPIRE")
+	refreshTokenExpireStr := os.Getenv("REFRESH_TOKEN_EXPIRE_DAYS")
 	expiredTime, err := strconv.Atoi(expiredTimeStr)
+	refreshTokenExpire, err := strconv.Atoi(refreshTokenExpireStr)
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
 		return
@@ -142,7 +145,7 @@ func (idb *InDB) Login(c *gin.Context) {
 		UserID:       user.ID,
 		RefreshToken: refresh_token,
 		UserAgent:    c.Request.UserAgent(),
-		ExpiredAt:    time.Now().Add(7 * 24 * time.Hour).Unix(),
+		ExpiredAt:    time.Now().Add(time.Duration(refreshTokenExpire) * 24 * time.Hour).Unix(),
 	}
 
 	err = idb.DB.Create(&refresh).Error

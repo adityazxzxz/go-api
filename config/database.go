@@ -7,12 +7,13 @@ import (
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 func DBInit() (*gorm.DB, error) {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8&parseTime=True", os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD"), os.Getenv("DB_HOST"), os.Getenv("DB_PORT"), os.Getenv("DB_NAME"))
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
-		// Logger: newLogger,
+		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
 		panic("cannot connect database")
