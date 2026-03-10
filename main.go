@@ -24,7 +24,9 @@ func main() {
 	router.POST("/refresh", controllers.Refresh)
 
 	protected := router.Group("/")
-	protected.Use(middleware.JWTAuth(), middleware.HMACAuth())
+	protected.Use(
+		middleware.JWTAuth(),
+		middleware.HMACAuth())
 	{
 		protected.POST("/logout", controllers.RevokeToken)
 		protected.GET("/profile", controllers.Profile)
@@ -32,6 +34,15 @@ func main() {
 	}
 	router.GET("/panic-test", func(c *gin.Context) {
 		panic("this is test panic error log")
+	})
+
+	limiterTest := router.Group("/")
+	limiterTest.Use(middleware.RateLimitByIP())
+
+	limiterTest.GET("/limit", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "This is a rate-limited endpoint",
+		})
 	})
 
 	router.Run(":" + os.Getenv("APP_PORT"))
