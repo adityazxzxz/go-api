@@ -131,53 +131,22 @@ func (idb *InDB) Login(c *gin.Context) {
 
 	// region generate token
 	if otp == "1" {
-		challengeID, otpCode := helpers.GenerateOTP()
-		data := map[string]interface{}{
-			"otp":     otpCode,
-			"user_id": user.ID,
-			"email":   user.Email,
-		}
-
-		jsonData, _ := json.Marshal(data)
-
-		// Simpan OTP di Redis dengan TTL 5 menit
-		err = config.Redis.Set(
-			c.Request.Context(),
-			"otp:"+challengeID,
-			jsonData,
-			5*time.Minute,
-		).Err()
-
-		// err = config.Redis.Set(c.Request.Context(), "otp:"+challengeID, otpCode, 5*time.Minute).Err()
+		otpResponse, err := createOTP(c, &user)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save OTP"})
+			fmt.Println(err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate otp"})
 			return
 		}
 
-		otpResponse := resources.OtpResponse{
-			Error:       false,
-			Message:     "OTP sent successfully",
-			ChallengeID: challengeID,
-		}
-
-		if os.Getenv("GIN_MODE") != "release" {
-			otpResponse.OtpDebug = otpCode
-		}
 		response = otpResponse
 	} else {
-		token, refresh_token, err := createToken(c, idb, user.ID, user.Email, expiredTime, refreshTokenExpire)
+		tokenResponse, err := createToken(c, idb, &user, expiredTime, refreshTokenExpire)
 		if err != nil {
 			fmt.Println(err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
 			return
 		}
-		tokenResponse := resources.ResponseLogin{
-			Error:        false,
-			Message:      "Login successful",
-			AccessToken:  token,
-			RefreshToken: refresh_token,
-			ExpiresIn:    expiredTime * 3600, // dalam detik
-		}
+
 		response = tokenResponse
 	}
 
@@ -214,7 +183,7 @@ func (idb *InDB) RevokeToken(c *gin.Context) {
 
 func (idb *InDB) VerifyOTP(c *gin.Context) {
 	var req requests.VerifyOtpRequest
-
+	var response any
 	if err := c.ShouldBindJSON(&req); err != nil {
 		fmt.Println(err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
@@ -245,6 +214,10 @@ func (idb *InDB) VerifyOTP(c *gin.Context) {
 
 	userID := uint(data["user_id"].(float64))
 	email := data["email"].(string)
+	user := models.User{
+		ID:    userID,
+		Email: email,
+	}
 	storedOtp, ok := data["otp"].(string)
 
 	if !ok {
@@ -258,44 +231,37 @@ func (idb *InDB) VerifyOTP(c *gin.Context) {
 		return
 	}
 
-	token, refresh_token, err := createToken(c, idb, userID, email, 1, 7)
+	tokenResponse, err := createToken(c, idb, &user, 1, 7)
 	if err != nil {
 		fmt.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
 		return
 	}
+	response = tokenResponse
 
 	// Hapus OTP setelah dipakai (single use)
 	config.Redis.Del(ctx, key)
-
-	response := resources.ResponseLogin{
-		Error:        false,
-		Message:      "Login successful",
-		AccessToken:  token,
-		RefreshToken: refresh_token,
-		ExpiresIn:    3600, // dalam detik
-	}
 
 	c.JSON(http.StatusOK, response)
 
 }
 
-func createToken(c *gin.Context, idb *InDB, userID uint, email string, expiredTime int, refreshTokenExpire int) (string, string, error) {
-	token, err := middleware.GenerateJWT(userID, email, expiredTime)
+func createToken(c *gin.Context, idb *InDB, user *models.User, expiredTime int, refreshTokenExpire int) (any, error) {
+	token, err := middleware.GenerateJWT(user.ID, user.Email, expiredTime)
 	if err != nil {
 		fmt.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
-		return "", "", err
+		return "", err
 	}
 
-	refresh_token, err := middleware.GenerateRefreshToken(idb.DB, userID)
+	refresh_token, err := middleware.GenerateRefreshToken(idb.DB, user.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate refresh token"})
-		return "", "", err
+		return "", err
 	}
 
 	refresh := models.UserSessions{
-		UserID:       userID,
+		UserID:       user.ID,
 		RefreshToken: refresh_token,
 		UserAgent:    c.Request.UserAgent(),
 		ExpiredAt:    time.Now().Add(time.Duration(refreshTokenExpire) * 24 * time.Hour).Unix(),
@@ -304,21 +270,51 @@ func createToken(c *gin.Context, idb *InDB, userID uint, email string, expiredTi
 	err = idb.DB.Create(&refresh).Error
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save refresh token"})
-		return "", "", err
+		return "", err
 	}
-	return token, refresh_token, nil
+	tokenResponse := resources.ResponseLogin{
+		Error:        false,
+		Message:      "Login successful",
+		AccessToken:  token,
+		RefreshToken: refresh_token,
+		ExpiresIn:    expiredTime * 3600, // dalam detik
+	}
+	return tokenResponse, nil
 }
 
-func createOTP() any {
+func createOTP(c *gin.Context, user *models.User) (any, error) {
 	challengeID, otpCode := helpers.GenerateOTP()
-	response := resources.OtpResponse{
-		Error:       false,
-		Message:     "Req OTP successful",
-		ChallengeID: challengeID,
-	}
-	if os.Getenv("APP_ENV") != "production" {
-		response.OtpDebug = otpCode
+	data := map[string]interface{}{
+		"otp":     otpCode,
+		"user_id": user.ID,
+		"email":   user.Email,
 	}
 
-	return response
+	jsonData, _ := json.Marshal(data)
+
+	// Simpan OTP di Redis dengan TTL 5 menit
+	err := config.Redis.Set(
+		c.Request.Context(),
+		"otp:"+challengeID,
+		jsonData,
+		5*time.Minute,
+	).Err()
+
+	// err = config.Redis.Set(c.Request.Context(), "otp:"+challengeID, otpCode, 5*time.Minute).Err()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save OTP"})
+		return nil, err
+	}
+
+	otpResponse := resources.OtpResponse{
+		Error:       false,
+		Message:     "OTP sent successfully",
+		ChallengeID: challengeID,
+	}
+
+	if os.Getenv("GIN_MODE") != "release" {
+		otpResponse.OtpDebug = otpCode
+	}
+
+	return otpResponse, nil
 }
