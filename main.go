@@ -21,6 +21,8 @@ func main() {
 
 	router := gin.Default()
 	router.POST("/login", controllers.Login)
+	router.POST("/register", controllers.Register)
+	router.POST("/verify-otp", controllers.VerifyOTP)
 	router.POST("/refresh", controllers.Refresh)
 
 	protected := router.Group("/")

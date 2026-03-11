@@ -1,10 +1,14 @@
 package controllers
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"go-api/config"
+	"go-api/helpers"
 	"go-api/middleware"
 	"go-api/models"
+	"go-api/requests"
 	"go-api/resources"
 	"net/http"
 	"os"
@@ -12,28 +16,18 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
-type LoginRequest struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required"`
-}
-type RegisterRequest struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required"`
-}
-type RefreshRequest struct {
-	RefreshToken string `json:"refresh_token" binding:"required"`
-}
 type Result struct {
 	UserID uint
 	Email  string
 }
 
 func (idb *InDB) Refresh(c *gin.Context) {
-	var req RefreshRequest
+	var req requests.RefreshRequest
 	var session models.UserSessions
 	expiredTimeStr := os.Getenv("JWT_EXPIRE")
 	expiredTime, err := strconv.Atoi(expiredTimeStr)
@@ -101,7 +95,9 @@ func (idb *InDB) Refresh(c *gin.Context) {
 }
 
 func (idb *InDB) Login(c *gin.Context) {
-	var req LoginRequest
+	var response any
+	var req requests.LoginRequest
+	otp := os.Getenv("OTP")
 	expiredTimeStr := os.Getenv("JWT_EXPIRE")
 	refreshTokenExpireStr := os.Getenv("REFRESH_TOKEN_EXPIRE_DAYS")
 	expiredTime, err := strconv.Atoi(expiredTimeStr)
@@ -128,50 +124,68 @@ func (idb *InDB) Login(c *gin.Context) {
 		return
 	}
 
-	token, err := middleware.GenerateJWT(user.ID, user.Email, expiredTime)
-	if err != nil {
-		fmt.Println(err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
-		return
-	}
-
-	refresh_token, err := middleware.GenerateRefreshToken(idb.DB, user.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate refresh token"})
-		return
-	}
-
-	refresh := models.UserSessions{
-		UserID:       user.ID,
-		RefreshToken: refresh_token,
-		UserAgent:    c.Request.UserAgent(),
-		ExpiredAt:    time.Now().Add(time.Duration(refreshTokenExpire) * 24 * time.Hour).Unix(),
-	}
-
-	err = idb.DB.Create(&refresh).Error
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save refresh token"})
-		return
-	}
-
 	idb.DB.Model(&user).Updates(map[string]interface{}{
 		"last_login": time.Now().Unix(),
 		"last_ip":    c.ClientIP(),
 	})
 
-	response := resources.ResponseLogin{
-		Error:        false,
-		Message:      "Login successful",
-		AccessToken:  token,
-		RefreshToken: refresh_token,
-		ExpiresIn:    expiredTime * 3600, // dalam detik
+	// region generate token
+	if otp == "1" {
+		challengeID, otpCode := helpers.GenerateOTP()
+		data := map[string]interface{}{
+			"otp":     otpCode,
+			"user_id": user.ID,
+			"email":   user.Email,
+		}
+
+		jsonData, _ := json.Marshal(data)
+
+		// Simpan OTP di Redis dengan TTL 5 menit
+		err = config.Redis.Set(
+			c.Request.Context(),
+			"otp:"+challengeID,
+			jsonData,
+			5*time.Minute,
+		).Err()
+
+		// err = config.Redis.Set(c.Request.Context(), "otp:"+challengeID, otpCode, 5*time.Minute).Err()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save OTP"})
+			return
+		}
+
+		otpResponse := resources.OtpResponse{
+			Error:       false,
+			Message:     "OTP sent successfully",
+			ChallengeID: challengeID,
+		}
+
+		if os.Getenv("GIN_MODE") != "release" {
+			otpResponse.OtpDebug = otpCode
+		}
+		response = otpResponse
+	} else {
+		token, refresh_token, err := createToken(c, idb, user.ID, user.Email, expiredTime, refreshTokenExpire)
+		if err != nil {
+			fmt.Println(err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+			return
+		}
+		tokenResponse := resources.ResponseLogin{
+			Error:        false,
+			Message:      "Login successful",
+			AccessToken:  token,
+			RefreshToken: refresh_token,
+			ExpiresIn:    expiredTime * 3600, // dalam detik
+		}
+		response = tokenResponse
 	}
 
 	c.JSON(http.StatusOK, response)
 }
 
 func (idb *InDB) RevokeToken(c *gin.Context) {
-	var req RefreshRequest
+	var req requests.RefreshRequest
 	var session models.UserSessions
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -196,4 +210,115 @@ func (idb *InDB) RevokeToken(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Token revoked successfully"})
+}
+
+func (idb *InDB) VerifyOTP(c *gin.Context) {
+	var req requests.VerifyOtpRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		fmt.Println(err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+	// Ambil OTP dari Redis
+	ctx := c.Request.Context()
+
+	key := "otp:" + req.ChallengeID
+
+	storedData, err := config.Redis.Get(ctx, key).Result()
+	if err == redis.Nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "OTP expired or not found"})
+		return
+	}
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Redis error"})
+		return
+	}
+
+	var data map[string]interface{}
+	err = json.Unmarshal([]byte(storedData), &data)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse OTP data"})
+		return
+	}
+
+	userID := uint(data["user_id"].(float64))
+	email := data["email"].(string)
+	storedOtp, ok := data["otp"].(string)
+
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid OTP format"})
+		return
+	}
+
+	// Compare OTP
+	if storedOtp != req.Otp {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid OTP"})
+		return
+	}
+
+	token, refresh_token, err := createToken(c, idb, userID, email, 1, 7)
+	if err != nil {
+		fmt.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+		return
+	}
+
+	// Hapus OTP setelah dipakai (single use)
+	config.Redis.Del(ctx, key)
+
+	response := resources.ResponseLogin{
+		Error:        false,
+		Message:      "Login successful",
+		AccessToken:  token,
+		RefreshToken: refresh_token,
+		ExpiresIn:    3600, // dalam detik
+	}
+
+	c.JSON(http.StatusOK, response)
+
+}
+
+func createToken(c *gin.Context, idb *InDB, userID uint, email string, expiredTime int, refreshTokenExpire int) (string, string, error) {
+	token, err := middleware.GenerateJWT(userID, email, expiredTime)
+	if err != nil {
+		fmt.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+		return "", "", err
+	}
+
+	refresh_token, err := middleware.GenerateRefreshToken(idb.DB, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate refresh token"})
+		return "", "", err
+	}
+
+	refresh := models.UserSessions{
+		UserID:       userID,
+		RefreshToken: refresh_token,
+		UserAgent:    c.Request.UserAgent(),
+		ExpiredAt:    time.Now().Add(time.Duration(refreshTokenExpire) * 24 * time.Hour).Unix(),
+	}
+
+	err = idb.DB.Create(&refresh).Error
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save refresh token"})
+		return "", "", err
+	}
+	return token, refresh_token, nil
+}
+
+func createOTP() any {
+	challengeID, otpCode := helpers.GenerateOTP()
+	response := resources.OtpResponse{
+		Error:       false,
+		Message:     "Req OTP successful",
+		ChallengeID: challengeID,
+	}
+	if os.Getenv("APP_ENV") != "production" {
+		response.OtpDebug = otpCode
+	}
+
+	return response
 }
