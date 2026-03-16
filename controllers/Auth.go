@@ -233,8 +233,6 @@ func (idb *InDB) VerifyMagicLink(c *gin.Context) {
 				LastIP:    c.ClientIP(),
 			}
 
-			fmt.Println("Creating new user:", user)
-
 			if err := idb.DB.Create(&user).Error; err != nil {
 				fmt.Println(err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
@@ -245,6 +243,22 @@ func (idb *InDB) VerifyMagicLink(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
+	}
+
+	updates := models.User{
+		LastLogin: time.Now().Unix(),
+		LastIP:    c.ClientIP(),
+	}
+
+	err = idb.DB.Model(&user).Updates(updates).Error
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, resources.Response{
+			Error:   true,
+			Message: "Update last login failed",
+			Data:    nil,
+		})
+
+		return
 	}
 
 	tokenResponse, err = createToken(c, idb, &user, 1, 7)

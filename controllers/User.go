@@ -17,7 +17,6 @@ func (idb *InDB) Register(c *gin.Context) {
 	var req requests.RegisterRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		fmt.Println(err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		return
 	}
