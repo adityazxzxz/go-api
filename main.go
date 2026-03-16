@@ -20,21 +20,27 @@ func main() {
 	controllers := &controllers.InDB{DB: db}
 
 	router := gin.Default()
-	router.POST("/login", controllers.Login)
-	router.POST("/login-magic-link", controllers.LoginMagicLinkRequest)
-	router.POST("/verify-link", controllers.VerifyMagicLink)
-	router.POST("/register", controllers.Register)
-	router.POST("/verify-otp", controllers.VerifyOTP)
-	router.POST("/refresh", controllers.Refresh)
 
-	protected := router.Group("/")
-	protected.Use(
+	hmacProtect := router.Group("/")
+	hmacProtect.Use(middleware.HMACAuth())
+	{
+		hmacProtect.POST("/login", controllers.Login)
+		hmacProtect.POST("/login-magic-link", controllers.LoginMagicLinkRequest)
+		hmacProtect.POST("/verify-link", controllers.VerifyMagicLink)
+		hmacProtect.POST("/register", controllers.Register)
+		hmacProtect.POST("/verify-otp", controllers.VerifyOTP)
+	}
+
+	allProtect := router.Group("/")
+	allProtect.Use(
 		middleware.JWTAuth(),
 		middleware.HMACAuth())
 	{
-		protected.POST("/logout", controllers.RevokeToken)
-		protected.GET("/profile", controllers.Profile)
-		protected.PUT("/profile", controllers.UpdateProfile)
+		allProtect.POST("/logout", controllers.RevokeToken)
+
+		allProtect.POST("/refresh", controllers.Refresh)
+		allProtect.GET("/profile", controllers.Profile)
+		allProtect.PUT("/profile", controllers.UpdateProfile)
 	}
 	router.GET("/panic-test", func(c *gin.Context) {
 		panic("this is test panic error log")
