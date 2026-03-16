@@ -21,3 +21,7 @@ type VerifyOtpRequest struct {
 	ChallengeID string `json:"challenge_id" binding:"required"`
 	Otp         string `json:"otp" binding:"required"`
 }
+
+type GoogleLoginRequest struct {
+	IDToken string `json:"id_token"`
+}

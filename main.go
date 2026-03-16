@@ -7,10 +7,12 @@ import (
 	"go-api/middleware"
 	"os"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
+
 	config.LoadEnv()         // load environment variables & key secret
 	config.InitRedis()       // initial redis connection
 	db, _ := config.DBInit() // initial database connection
@@ -19,6 +21,10 @@ func main() {
 
 	controllers := &controllers.InDB{DB: db}
 	router := gin.Default()
+	router.Use(cors.Default())
+	// perlu config cors untuk production, sekarang pakai default untuk development
+
+	router.POST("/login-google", controllers.LoginGoogle)
 
 	hmacProtect := router.Group("/")
 	hmacProtect.Use(

@@ -20,6 +20,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
+	"google.golang.org/api/idtoken"
 	"gorm.io/gorm"
 )
 
@@ -298,7 +299,75 @@ func SendMagicLink(email string) (string, error) {
 
 	return token, nil
 }
-func (idb *InDB) LoginGoogle(c *gin.Context) {}
+
+func (idb *InDB) LoginGoogle(c *gin.Context) {
+	var req requests.GoogleLoginRequest
+	var response any
+	googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid request",
+		})
+		return
+	}
+
+	payload, err := idtoken.Validate(
+		context.Background(),
+		req.IDToken,
+		googleClientID,
+	)
+
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "invalid google token",
+		})
+		return
+	}
+	email := payload.Claims["email"].(string)
+	err = idb.DB.Where("email = ?", email).First(&models.User{}).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			user := models.User{
+				Email:     email,
+				FirstName: payload.Claims["name"].(string),
+				LoginType: "google",
+				UUID:      uuid.NewString(),
+				Status:    1,
+				LastLogin: time.Now().Unix(),
+				LastIP:    c.ClientIP(),
+			}
+
+			if err := idb.DB.Create(&user).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"error": "failed to create user",
+				})
+				return
+			}
+		}
+		name := payload.Claims["name"].(string)
+		// googleID := payload.Subject
+		var user models.User
+		user = models.User{
+			Email:     email,
+			FirstName: name,
+			LoginType: "google",
+			UUID:      uuid.NewString(),
+			Status:    1,
+			LastLogin: time.Now().Unix(),
+			LastIP:    c.ClientIP(),
+		}
+
+		tokenResponse, err := createToken(c, idb, &user, 1, 7)
+		if err != nil {
+			fmt.Println(err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+			return
+		}
+		response = tokenResponse
+
+		c.JSON(http.StatusOK, response)
+	}
+}
 
 func (idb *InDB) RevokeToken(c *gin.Context) {
 	var req requests.RefreshRequest
