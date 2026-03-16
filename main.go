@@ -18,11 +18,13 @@ func main() {
 	helpers.SetupLogging()
 
 	controllers := &controllers.InDB{DB: db}
-
 	router := gin.Default()
 
 	hmacProtect := router.Group("/")
-	hmacProtect.Use(middleware.HMACAuth())
+	hmacProtect.Use(
+		middleware.HMACAuth(),
+		middleware.RateLimitByIP(),
+	)
 	{
 		hmacProtect.POST("/login", controllers.Login)
 		hmacProtect.POST("/login-magic-link", controllers.LoginMagicLinkRequest)
@@ -34,10 +36,11 @@ func main() {
 	allProtect := router.Group("/")
 	allProtect.Use(
 		middleware.JWTAuth(),
-		middleware.HMACAuth())
+		middleware.HMACAuth(),
+		middleware.RateLimitByIP(),
+	)
 	{
 		allProtect.POST("/logout", controllers.RevokeToken)
-
 		allProtect.POST("/refresh", controllers.Refresh)
 		allProtect.GET("/profile", controllers.Profile)
 		allProtect.PUT("/profile", controllers.UpdateProfile)
