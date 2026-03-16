@@ -5,6 +5,14 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
+type MagicLinkRequest struct {
+	Email string `json:"email" binding:"required,email"`
+}
+
+type VerifyMagicLinkRequest struct {
+	MagicToken string `json:"magic_token" binding:"required"`
+}
+
 type RefreshRequest struct {
 	RefreshToken string `json:"refresh_token" binding:"required"`
 }

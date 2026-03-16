@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -16,6 +17,7 @@ func (idb *InDB) Register(c *gin.Context) {
 	var req requests.RegisterRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
+		fmt.Println(err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		return
 	}
@@ -27,6 +29,7 @@ func (idb *InDB) Register(c *gin.Context) {
 	}
 
 	user := models.User{
+		UUID:      uuid.NewString(),
 		Email:     req.Email,
 		FirstName: req.FirstName,
 		LastName:  req.LastName,

@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -152,6 +153,129 @@ func (idb *InDB) Login(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response)
 }
+
+func (idb *InDB) LoginMagicLinkRequest(c *gin.Context) {
+	var response resources.MagicLinkResponse
+	var req requests.MagicLinkRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	token, err := SendMagicLink(req.Email)
+	if err != nil {
+		fmt.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send magic link"})
+		return
+	}
+
+	// region send email token
+	// endregion
+
+	response = resources.MagicLinkResponse{
+		Error:      false,
+		Message:    "Magic link sent successfully",
+		MagicToken: token,
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+func (idb *InDB) VerifyMagicLink(c *gin.Context) {
+	var req requests.VerifyMagicLinkRequest
+	var tokenResponse any
+
+	fmt.Println("masuk verify magic link", req)
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	token := req.MagicToken
+	ctx := context.Background()
+	key := "magic_link:" + token
+
+	storedData, err := config.Redis.Get(ctx, key).Result()
+	if err == redis.Nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Magic link expired or not found"})
+		return
+	}
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Redis error"})
+		return
+	}
+
+	var data map[string]interface{}
+	err = json.Unmarshal([]byte(storedData), &data)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse magic link data"})
+		return
+	}
+
+	email := data["email"].(string)
+
+	var user models.User
+	err = idb.DB.Where("email = ?", email).First(&user).Error
+	if err != nil {
+
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			user = models.User{
+				Email: email,
+			}
+
+			if err := idb.DB.Create(&user).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
+				return
+			}
+
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+	}
+
+	tokenResponse, err = createToken(c, idb, &user, 1, 7)
+	if err != nil {
+		fmt.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+		return
+	}
+
+	// Hapus magic link setelah dipakai (single use)
+	config.Redis.Del(ctx, key)
+
+	c.JSON(http.StatusOK, tokenResponse)
+}
+
+func SendMagicLink(email string) (string, error) {
+	var req requests.MagicLinkRequest
+	token, err := helpers.GenerateMagicToken()
+
+	data := map[string]interface{}{
+		"email": req.Email,
+	}
+	ctx := context.Background()
+	jsonData, _ := json.Marshal(data)
+
+	// Simpan magic link di Redis dengan TTL 5 menit
+	err = config.Redis.Set(
+		ctx,
+		"magic_link:"+token,
+		jsonData,
+		5*time.Minute,
+	).Err()
+
+	// err = config.Redis.Set(c.Request.Context(), "otp:"+challengeID, otpCode, 5*time.Minute).Err()
+	if err != nil {
+		return "", err
+	}
+
+	return token, nil
+}
+func (idb *InDB) LoginGoogle(c *gin.Context) {}
 
 func (idb *InDB) RevokeToken(c *gin.Context) {
 	var req requests.RefreshRequest
