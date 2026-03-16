@@ -216,6 +216,7 @@ func (idb *InDB) VerifyMagicLink(c *gin.Context) {
 	}
 
 	email := data["email"].(string)
+	fmt.Println("email dari redis", email)
 
 	var user models.User
 	err = idb.DB.Where("email = ?", email).First(&user).Error
@@ -223,10 +224,14 @@ func (idb *InDB) VerifyMagicLink(c *gin.Context) {
 
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			user = models.User{
-				Email: email,
+				Email:     email,
+				LoginType: "magic_link",
 			}
 
+			fmt.Println("Creating new user:", user)
+
 			if err := idb.DB.Create(&user).Error; err != nil {
+				fmt.Println(err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
 				return
 			}
@@ -251,11 +256,10 @@ func (idb *InDB) VerifyMagicLink(c *gin.Context) {
 }
 
 func SendMagicLink(email string) (string, error) {
-	var req requests.MagicLinkRequest
 	token, err := helpers.GenerateMagicToken()
 
 	data := map[string]interface{}{
-		"email": req.Email,
+		"email": email,
 	}
 	ctx := context.Background()
 	jsonData, _ := json.Marshal(data)
