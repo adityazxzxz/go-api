@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -226,6 +227,10 @@ func (idb *InDB) VerifyMagicLink(c *gin.Context) {
 			user = models.User{
 				Email:     email,
 				LoginType: "magic_link",
+				UUID:      uuid.NewString(),
+				Status:    1,
+				LastLogin: time.Now().Unix(),
+				LastIP:    c.ClientIP(),
 			}
 
 			fmt.Println("Creating new user:", user)
