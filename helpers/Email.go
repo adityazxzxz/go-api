@@ -45,12 +45,7 @@ func SendEmail(to string, subject string, body string) error {
 }
 
 func MailTemplateFormat(data map[string]interface{}, template string) string {
-	body := `
-		<h1>Halo $nama$</h1>
-		<p>Kode kamu: <b>$kode$</b></p>
-	`
-
-	result := body
+	result := template
 
 	for key, value := range data {
 		placeholder := "$" + key + "$"
