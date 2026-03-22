@@ -64,5 +64,8 @@ func main() {
 		})
 	})
 
+	// region consumer terpisah untuk miksoservice, bisa dipindah ke file lain
+	// go consumers.MailConsumer()
+	// endregion
 	router.Run(":" + os.Getenv("APP_PORT"))
 }

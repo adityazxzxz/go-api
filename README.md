@@ -68,6 +68,42 @@ Gunakan database:
 
 ---
 
+### Create table `email_templates`
+
+    CREATE TABLE email_template (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        uuid VARCHAR(36) NOT NULL,
+        template_name VARCHAR(255) NOT NULL,
+        body TEXT,
+        prev_data TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+        deleted_at TIMESTAMP NULL DEFAULT NULL,
+        created_by BIGINT NULL,
+        updated_by BIGINT NULL,
+        deleted_by BIGINT NULL,
+        INDEX idx_template_name (template_name),
+        UNIQUE KEY uniq_uuid (uuid));
+
+---
+
+### Insert mail example body
+    INSERT INTO email_template (
+        uuid,
+        template_name,
+        body,
+        prev_data,
+        created_by
+    ) VALUES (
+        UUID(),
+        'magic_link',
+        '<h1>Halo $nama$</h1>
+    <p>Kode kamu: <b>$kode$</b></p>',
+        NULL,
+        1
+    );
+---
+
 
 
 ## 🚀 Running the App

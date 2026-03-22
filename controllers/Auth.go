@@ -159,6 +159,7 @@ func (idb *InDB) Login(c *gin.Context) {
 func (idb *InDB) LoginMagicLinkRequest(c *gin.Context) {
 	var response resources.MagicLinkResponse
 	var req requests.MagicLinkRequest
+	var body string
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
@@ -170,6 +171,20 @@ func (idb *InDB) LoginMagicLinkRequest(c *gin.Context) {
 		fmt.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send magic link"})
 		return
+	}
+
+	err = idb.DB.
+		Model(&models.EmailTemplate{}).
+		Select("body").
+		Where("template_name = ?", "magic_link").
+		Scan(&body).Error
+
+	if err == nil {
+		mailPayload := helpers.MailTemplateFormat(map[string]interface{}{
+			"nama": req.Email,
+			"kode": token,
+		}, body)
+		go helpers.SendEmail("aditya.pratama@asiaquatro.net", "Subject", mailPayload)
 	}
 
 	// region send email token
