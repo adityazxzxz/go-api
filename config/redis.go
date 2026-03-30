@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"go-api/helpers"
 	"log"
 	"os"
 	"strconv"
@@ -47,8 +48,8 @@ func InitRedis() {
 	// Test connection
 	_, err = Redis.Ping(Ctx).Result()
 	if err != nil {
-		log.Fatal("Failed to connect to Redis:", err)
+		helpers.ErrorLogger.Fatal("Failed to connect to Redis:", err)
 	}
 
-	log.Println("Redis connected:", addr)
+	helpers.InfoLogger.Println("Connected to Redis successfully")
 }

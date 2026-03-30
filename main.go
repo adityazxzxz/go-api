@@ -13,14 +13,15 @@ import (
 
 func main() {
 
+	helpers.SetupLogging()
 	config.LoadEnv()         // load environment variables & key secret
 	config.InitRedis()       // initial redis connection
 	db, _ := config.DBInit() // initial database connection
 	gin.SetMode(os.Getenv("GIN_MODE"))
-	helpers.SetupLogging()
 
 	controllers := &controllers.InDB{DB: db}
 	router := gin.Default()
+
 	router.Use(cors.Default())
 	// perlu config cors untuk production, sekarang pakai default untuk development
 

@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"fmt"
+	"go-api/helpers"
 	"go-api/models"
 	"go-api/requests"
 	"go-api/resources"
@@ -41,6 +42,7 @@ func (idb *InDB) Register(c *gin.Context) {
 	}
 
 	if err := idb.DB.Create(&user).Error; err != nil {
+		helpers.ErrorLogger.Println("Registration error:", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 		return
 	}
@@ -59,6 +61,7 @@ func (idb *InDB) Profile(c *gin.Context) {
 		Scan(&profile).Error
 
 	if err != nil {
+		helpers.ErrorLogger.Println("Profile error:", err)
 		result := resources.Response{
 			Error:   true,
 			Message: "Internal Error",
@@ -128,6 +131,7 @@ func (idb *InDB) UpdateProfile(c *gin.Context) {
 
 	err = idb.DB.Model(&profile).Updates(updates).Error
 	if err != nil {
+		helpers.ErrorLogger.Println("Update profile error:", err)
 		c.JSON(http.StatusInternalServerError, resources.Response{
 			Error:   true,
 			Message: "Update profile failed",

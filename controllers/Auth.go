@@ -59,7 +59,7 @@ func (idb *InDB) Refresh(c *gin.Context) {
 			})
 			return
 		}
-
+		helpers.ErrorLogger.Println("Refresh token error:", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Internal Server Error",
 		})
@@ -184,7 +184,7 @@ func (idb *InDB) LoginMagicLinkRequest(c *gin.Context) {
 			"nama": req.Email,
 			"kode": token,
 		}, body)
-		go helpers.SendEmail("aditya.pratama@asiaquatro.net", "Subject", mailPayload)
+		go helpers.SendEmail(req.Email, "Subject", mailPayload)
 	}
 
 	// region send email token
@@ -202,8 +202,6 @@ func (idb *InDB) LoginMagicLinkRequest(c *gin.Context) {
 func (idb *InDB) VerifyMagicLink(c *gin.Context) {
 	var req requests.VerifyMagicLinkRequest
 	var tokenResponse any
-
-	fmt.Println("masuk verify magic link", req)
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
@@ -514,6 +512,7 @@ func createToken(c *gin.Context, idb *InDB, user *models.User, expiredTime int, 
 }
 
 func createOTP(c *gin.Context, user *models.User) (any, error) {
+	ttl, err := strconv.Atoi(os.Getenv("OTP_TTL_MINUTES"))
 	challengeID, otpCode := helpers.GenerateOTP()
 	data := map[string]interface{}{
 		"otp":     otpCode,
@@ -524,11 +523,11 @@ func createOTP(c *gin.Context, user *models.User) (any, error) {
 	jsonData, _ := json.Marshal(data)
 
 	// Simpan OTP di Redis dengan TTL 5 menit
-	err := config.Redis.Set(
+	err = config.Redis.Set(
 		c.Request.Context(),
 		"otp:"+challengeID,
 		jsonData,
-		5*time.Minute,
+		time.Duration(ttl)*time.Minute,
 	).Err()
 
 	// err = config.Redis.Set(c.Request.Context(), "otp:"+challengeID, otpCode, 5*time.Minute).Err()

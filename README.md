@@ -4,9 +4,30 @@ Simple REST API built with Go & MySQL.
 
 ---
 
-## 📦 Database Setup (MySQL)
 
-### 1️⃣ Create Database
+
+### System Requirement
+* Mysql v8.0.40  
+* Go (1.25+ recommended)
+* Redis 7.4.7
+- Air (optional)
+
+---
+
+### Application Mode
+
+    GIN_MODE=release/debug
+release untuk production  
+debug untuk development  
+gin_mode dapat di set .env
+
+---
+
+
+
+## Database Setup (MySQL)
+
+### Create Database
 
     CREATE DATABASE IF NOT EXISTS mydatabase
     CHARACTER SET utf8mb4
@@ -18,7 +39,7 @@ Gunakan database:
 
 ---
 
-### 2️⃣ Create Table `users`
+### Create Table `users`
 
     CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -42,7 +63,7 @@ Gunakan database:
 
 ---
 
-### 3️⃣ Recommended Indexes
+### Recommended Indexes
 
     CREATE UNIQUE INDEX idx_users_uuid ON users(uuid);
     CREATE UNIQUE INDEX idx_users_username ON users(username);
@@ -106,15 +127,15 @@ Gunakan database:
 
 
 
-## 🚀 Running the App
+## Running the App
 
-### ▶ Normal Run
+### Normal Run
 
     go run main.go
 
 ---
 
-### 🔥 Dev Mode (Hot Reload)
+### Dev Mode (Hot Reload)
 
 Menggunakan Air:
 
@@ -126,15 +147,7 @@ Install Air (jika belum):
 
 ---
 
-## ✅ Requirements
-
-- Go (1.20+ recommended)
-- MySQL
-- Air (optional)
-
----
-
-## 🚀 Cara pakai HMAC di client pre request POSTMAN
+## Cara pakai HMAC di client pre request POSTMAN
 
 ```javascript
 

@@ -25,7 +25,7 @@ func SendEmail(to string, subject string, body string) error {
 	m := gomail.NewMessage()
 	m.SetHeader("From", from)
 	m.SetHeader("To", to)
-	m.SetHeader("Subject", "Test Email Gomail")
+	m.SetHeader("Subject", subject)
 	m.SetBody("text/html", body)
 
 	// dialer (SESUAI OUTLOOK)
