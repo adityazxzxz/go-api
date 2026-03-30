@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"go-api/helpers"
 	"log"
 	"os"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 func setupLogFile(path string) *os.File {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
 	if err != nil {
+		helpers.ErrorLogger.Panic("Failed to open log file:", err)
 		panic(err)
 	}
 	return f

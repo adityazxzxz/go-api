@@ -107,6 +107,7 @@ func (idb *InDB) Login(c *gin.Context) {
 	refreshTokenExpire, err := strconv.Atoi(refreshTokenExpireStr)
 
 	if err != nil {
+		helpers.ErrorLogger.Println("Invalid token expiration configuration:", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
 		return
 	}
@@ -134,11 +135,27 @@ func (idb *InDB) Login(c *gin.Context) {
 
 	// region generate token
 	if otp == "1" {
-		otpResponse, err := createOTP(c, &user)
+		var otpEmailBody string
+
+		otpResponse, otpCode, err := idb.createOTP(c, &user, otpEmailBody)
 		if err != nil {
-			fmt.Println(err)
+			helpers.ErrorLogger.Println("OTP generation error:", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate otp"})
 			return
+		}
+
+		err = idb.DB.
+			Model(&models.EmailTemplate{}).
+			Select("body").
+			Where("template_name = ?", "magic_link").
+			Scan(&otpEmailBody).Error
+
+		if err == nil {
+			mailPayload := helpers.MailTemplateFormat(map[string]interface{}{
+				"nama": req.Email,
+				"kode": otpCode,
+			}, otpEmailBody)
+			go helpers.SendEmail(req.Email, "Subject", mailPayload)
 		}
 
 		response = otpResponse
@@ -511,7 +528,7 @@ func createToken(c *gin.Context, idb *InDB, user *models.User, expiredTime int, 
 	return tokenResponse, nil
 }
 
-func createOTP(c *gin.Context, user *models.User) (any, error) {
+func (idb *InDB) createOTP(c *gin.Context, user *models.User, emailBody string) (any, string, error) {
 	ttl, err := strconv.Atoi(os.Getenv("OTP_TTL_MINUTES"))
 	challengeID, otpCode := helpers.GenerateOTP()
 	data := map[string]interface{}{
@@ -533,7 +550,7 @@ func createOTP(c *gin.Context, user *models.User) (any, error) {
 	// err = config.Redis.Set(c.Request.Context(), "otp:"+challengeID, otpCode, 5*time.Minute).Err()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save OTP"})
-		return nil, err
+		return nil, "", err
 	}
 
 	otpResponse := resources.OtpResponse{
@@ -542,9 +559,15 @@ func createOTP(c *gin.Context, user *models.User) (any, error) {
 		ChallengeID: challengeID,
 	}
 
+	mailPayload := helpers.MailTemplateFormat(map[string]interface{}{
+		"nama": user.Email,
+		"kode": otpCode,
+	}, emailBody)
+	go helpers.SendEmail(user.Email, "Subject", mailPayload)
+
 	if os.Getenv("GIN_MODE") != "release" {
 		otpResponse.OtpDebug = otpCode
 	}
 
-	return otpResponse, nil
+	return otpResponse, otpCode, nil
 }
