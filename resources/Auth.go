@@ -23,9 +23,13 @@ type OtpResponse struct {
 	OtpDebug    string `json:"otp_debug,omitempty"`
 }
 
-type MagicLinkResponse struct {
-	Error      bool   `json:"error"`
-	Message    string `json:"message"`
+type MagicLinkData struct {
 	MagicToken string `json:"magic_token"`
 	URL        string `json:"url"`
+}
+
+type MagicLinkResponse struct {
+	Error   bool          `json:"error"`
+	Message string        `json:"message"`
+	Data    MagicLinkData `json:"data"`
 }

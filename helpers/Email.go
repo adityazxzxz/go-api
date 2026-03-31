@@ -17,7 +17,7 @@ func SendEmail(to string, subject string, body string) error {
 	portString := os.Getenv("EMAIL_PORT")
 	port, err := strconv.Atoi(portString)
 	if err != nil {
-		fmt.Println("ERROR: Invalid email port")
+		ErrorLogger.Println("Invalid email port:", err)
 		return err
 	}
 
@@ -28,7 +28,6 @@ func SendEmail(to string, subject string, body string) error {
 	m.SetHeader("Subject", subject)
 	m.SetBody("text/html", body)
 
-	// dialer (SESUAI OUTLOOK)
 	d := gomail.NewDialer(
 		host,
 		port,
@@ -38,7 +37,7 @@ func SendEmail(to string, subject string, body string) error {
 
 	// kirim email
 	if err := d.DialAndSend(m); err != nil {
-		fmt.Println("ERROR:", err)
+		ErrorLogger.Println("Failed to send email:", err)
 		return nil
 	}
 	return nil

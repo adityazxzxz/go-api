@@ -147,8 +147,10 @@ func (idb *InDB) Login(c *gin.Context) {
 		err = idb.DB.
 			Model(&models.EmailTemplate{}).
 			Select("body").
-			Where("template_name = ?", "magic_link").
+			Where("template_name = ?", "otp").
 			Scan(&otpEmailBody).Error
+
+		helpers.ErrorLogger.Println("error email template", err)
 
 		if err == nil {
 			mailPayload := helpers.MailTemplateFormat(map[string]interface{}{
@@ -208,9 +210,12 @@ func (idb *InDB) LoginMagicLinkRequest(c *gin.Context) {
 	// endregion
 
 	response = resources.MagicLinkResponse{
-		Error:      false,
-		Message:    "Magic link sent successfully",
-		MagicToken: token,
+		Error:   false,
+		Message: "Magic link sent successfully",
+		Data: resources.MagicLinkData{
+			MagicToken: token,
+			URL:        os.Getenv("FRONTEND_URL") + "/verify-link?token=" + token,
+		},
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -539,7 +544,7 @@ func (idb *InDB) createOTP(c *gin.Context, user *models.User, emailBody string) 
 
 	jsonData, _ := json.Marshal(data)
 
-	// Simpan OTP di Redis dengan TTL 5 menit
+	// Simpan OTP di Redis dengan TTL set di env
 	err = config.Redis.Set(
 		c.Request.Context(),
 		"otp:"+challengeID,
@@ -558,12 +563,6 @@ func (idb *InDB) createOTP(c *gin.Context, user *models.User, emailBody string) 
 		Message:     "OTP sent successfully",
 		ChallengeID: challengeID,
 	}
-
-	mailPayload := helpers.MailTemplateFormat(map[string]interface{}{
-		"nama": user.Email,
-		"kode": otpCode,
-	}, emailBody)
-	go helpers.SendEmail(user.Email, "Subject", mailPayload)
 
 	if os.Getenv("GIN_MODE") != "release" {
 		otpResponse.OtpDebug = otpCode

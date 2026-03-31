@@ -91,7 +91,7 @@ Gunakan database:
 
 ### Create table `email_templates`
 
-    CREATE TABLE email_template (
+    CREATE TABLE email_templates (
         id BIGINT AUTO_INCREMENT PRIMARY KEY,
         uuid VARCHAR(36) NOT NULL,
         template_name VARCHAR(255) NOT NULL,
@@ -109,7 +109,7 @@ Gunakan database:
 ---
 
 ### Insert mail example body
-    INSERT INTO email_template (
+    INSERT INTO email_templates (
         uuid,
         template_name,
         body,
