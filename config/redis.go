@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"crypto/tls"
 	"go-api/helpers"
 	"log"
 	"os"
@@ -26,6 +27,7 @@ func InitRedis() {
 	}
 
 	password := os.Getenv("REDIS_PASSWORD")
+	username := os.Getenv("REDIS_USERNAME")
 
 	dbStr := os.Getenv("REDIS_DB")
 	if dbStr == "" {
@@ -39,11 +41,22 @@ func InitRedis() {
 
 	addr := host + ":" + port
 
-	Redis = redis.NewClient(&redis.Options{
+	useTLS := os.Getenv("REDIS_TLS") == "true"
+
+	opt := &redis.Options{
 		Addr:     addr,
+		Username: username,
 		Password: password,
 		DB:       db,
-	})
+	}
+
+	if useTLS {
+		opt.TLSConfig = &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		}
+	}
+
+	Redis = redis.NewClient(opt)
 
 	// Test connection
 	_, err = Redis.Ping(Ctx).Result()
