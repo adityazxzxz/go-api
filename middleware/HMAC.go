@@ -25,10 +25,18 @@ func HMACAuth() gin.HandlerFunc {
 		signature := c.GetHeader("X-Signature")
 		nonce := c.GetHeader("X-Nonce")
 		timestamp := c.GetHeader("X-Timestamp")
+		apiKey := c.GetHeader("X-Api-Key")
 
-		if signature == "" || nonce == "" || timestamp == "" {
+		if signature == "" || nonce == "" || timestamp == "" || apiKey == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error": "Missing HMAC headers",
+			})
+			return
+		}
+
+		if apiKey != config.APIKey {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "Invalid API key",
 			})
 			return
 		}

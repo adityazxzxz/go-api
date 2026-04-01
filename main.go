@@ -33,11 +33,13 @@ func main() {
 		middleware.RateLimitByIP(),
 	)
 	{
+
 		hmacProtect.POST("/login", controllers.Login)
 		hmacProtect.POST("/login-magic-link", controllers.LoginMagicLinkRequest)
 		hmacProtect.POST("/verify-link", controllers.VerifyMagicLink)
 		hmacProtect.POST("/register", controllers.Register)
 		hmacProtect.POST("/verify-otp", controllers.VerifyOTP)
+		hmacProtect.POST("/payload-test", controllers.PayloadTest)
 	}
 
 	allProtect := router.Group("/")

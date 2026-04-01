@@ -9,6 +9,7 @@ import (
 
 var JWTKeyString string
 var HMACSecret string
+var APIKey string
 var JWTKey []byte
 
 func LoadEnv() {
@@ -18,6 +19,7 @@ func LoadEnv() {
 	}
 	JWTKeyString = os.Getenv("JWT_KEY")
 	HMACSecret = os.Getenv("HMAC_SECRET")
+	APIKey = os.Getenv("API_KEY")
 	if JWTKeyString == "" {
 		log.Println("WARNING: JWT_KEY not set, using default")
 		JWTKeyString = "mysupersecretkeymustbe32bytes!!!"

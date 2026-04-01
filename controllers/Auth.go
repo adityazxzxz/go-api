@@ -570,3 +570,33 @@ func (idb *InDB) createOTP(c *gin.Context, user *models.User, emailBody string) 
 
 	return otpResponse, otpCode, nil
 }
+
+func (idb *InDB) PayloadTest(c *gin.Context) {
+	bodyBytes, err := c.GetRawData()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   true,
+			"message": "Gagal membaca body",
+		})
+		return
+	}
+
+	// Restore body (biar bisa dipakai lagi)
+
+	// Parse ke JSON (map)
+	var jsonData map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &jsonData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   true,
+			"message": "Body bukan JSON valid",
+		})
+		return
+	}
+
+	// Return sebagai JSON
+	c.JSON(http.StatusOK, gin.H{
+		"error":   false,
+		"message": "HMAC valid, body diterima",
+		"data":    jsonData,
+	})
+}
