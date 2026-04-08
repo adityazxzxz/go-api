@@ -17,7 +17,11 @@ func (idb *InDB) Register(c *gin.Context) {
 	var req requests.RegisterRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   true,
+			"message": "Validation error",
+			"details": helpers.GinValidationFOrmatter(err, req),
+		})
 		return
 	}
 
