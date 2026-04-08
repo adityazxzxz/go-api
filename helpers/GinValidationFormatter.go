@@ -7,18 +7,26 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
-func GinValidationFOrmatter(err error, obj interface{}) map[string][]string {
+func GinValidationFormatter(err error, obj interface{}) map[string][]string {
 	errors := make(map[string][]string)
+	requiredFields := make(map[string]bool)
 
 	if ve, ok := err.(validator.ValidationErrors); ok {
 		for _, fe := range ve {
-
 			field := getJSONFieldName(obj, fe.Field())
+
+			if fe.Tag() == "required" {
+				errors[field] = []string{field + " is required"}
+				requiredFields[field] = true
+				continue
+			}
+
+			if requiredFields[field] {
+				continue
+			}
 
 			var msg string
 			switch fe.Tag() {
-			case "required":
-				msg = field + " is required"
 			case "email":
 				msg = field + " must be a valid email"
 			case "min":

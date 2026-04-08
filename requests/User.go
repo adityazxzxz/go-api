@@ -10,7 +10,7 @@ type RegisterRequest struct {
 }
 
 type Update struct {
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
+	FirstName string `json:"first_name" binding:"required"`
+	LastName  string `json:"last_name" binding:"required"`
 	UpdatedAt int64  `json:"updated_at"`
 }

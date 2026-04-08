@@ -20,7 +20,7 @@ func (idb *InDB) Register(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   true,
 			"message": "Validation error",
-			"details": helpers.GinValidationFOrmatter(err, req),
+			"details": helpers.GinValidationFormatter(err, req),
 		})
 		return
 	}
