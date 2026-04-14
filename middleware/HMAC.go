@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"go-api/config"
+	"go-api/helpers"
 	"io"
 	"net/http"
 	"strconv"
@@ -77,16 +78,17 @@ func HMACAuth() gin.HandlerFunc {
 			},
 		).Err()
 
-		if err == redis.Nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": "Replay attack detected",
-			})
-			return
-		}
-
 		if err != nil {
+			if err == redis.Nil {
+				c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
+					"error": "too many requests / replay",
+				})
+				return
+			}
+
+			helpers.ErrorLogger.Println("Redis error:", err)
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
-				"error": "Redis error",
+				"error": "internal error",
 			})
 			return
 		}
