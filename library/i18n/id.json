@@ -1,0 +1,6 @@
+{
+  "internal_error": "Terjadi kesalahan pada server",
+  "unauthorized": "Tidak diizinkan",
+  "success": "Berhasil",
+  "invalid_request": "Request tidak sesuai"
+}

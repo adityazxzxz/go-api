@@ -1,0 +1,6 @@
+{
+  "internal_error": "Internal server error",
+  "unauthorized": "Unauthorized",
+  "success": "Success",
+  "invalid_request": "Invalid request"
+}

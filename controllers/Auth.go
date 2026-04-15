@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"go-api/config"
 	"go-api/helpers"
+	"go-api/library/i18n"
 	"go-api/middleware"
 	"go-api/models"
 	"go-api/requests"
@@ -179,9 +180,10 @@ func (idb *InDB) LoginMagicLinkRequest(c *gin.Context) {
 	var response resources.MagicLinkResponse
 	var req requests.MagicLinkRequest
 	var body string
+	lang := c.GetString("lang")
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.T(lang, "invalid_request")})
 		return
 	}
 

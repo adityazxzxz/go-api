@@ -4,6 +4,7 @@ import (
 	"go-api/config"
 	"go-api/controllers"
 	"go-api/helpers"
+	"go-api/library/i18n"
 	"go-api/middleware"
 	"os"
 
@@ -14,6 +15,7 @@ import (
 func main() {
 
 	helpers.SetupLogging()
+	i18n.Init()
 	config.LoadEnv()         // load environment variables & key secret
 	config.InitRedis()       // initial redis connection
 	db, _ := config.DBInit() // initial database connection
@@ -21,7 +23,7 @@ func main() {
 
 	controllers := &controllers.InDB{DB: db}
 	router := gin.Default()
-
+	router.Use(middleware.LanguageMiddleware())
 	router.Use(cors.Default())
 	// perlu config cors untuk production, sekarang pakai default untuk development
 
